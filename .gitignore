@@ -1,0 +1,16 @@
+# .NET build output
+bin/
+obj/
+
+# Local SQLite database files
+*.db
+*.db-shm
+*.db-wal
+
+# Frontend dependencies and builds
+node_modules/
+dist/
+*.tsbuildinfo
+
+# OS/editor files
+.DS_Store
