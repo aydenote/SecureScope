@@ -137,6 +137,19 @@ button:disabled {
   margin: 0.35rem 0 0;
 }
 
+.notice-panel {
+  background: #eef8fa;
+  border: 1px solid #c8e7ee;
+  border-left: 4px solid #176f88;
+  border-radius: 6px;
+  color: #35445c;
+  padding: 0.9rem 1rem;
+}
+
+.notice-panel p {
+  margin: 0.35rem 0 0;
+}
+
 .score-panel {
   align-items: center;
   background: #ffffff;
@@ -232,6 +245,43 @@ button:disabled {
   min-width: 0;
   overflow: hidden;
   padding: 1rem;
+}
+
+.allowed-targets {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.allowed-targets > span {
+  color: #60708a;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.allowed-targets > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.target-button {
+  background: #eef8fa;
+  border: 1px solid #c8e7ee;
+  color: #176f88;
+  padding: 0.5rem 0.7rem;
+}
+
+.consent-row {
+  align-items: flex-start;
+  color: #35445c;
+  display: flex;
+  gap: 0.6rem;
+  line-height: 1.45;
+}
+
+.consent-row input {
+  flex: 0 0 auto;
+  margin-top: 0.2rem;
 }
 
 .check-card,

@@ -3,7 +3,7 @@ import CheckCard from '../components/CheckCard';
 import FindingCard from '../components/FindingCard';
 import SecurityRadarChart from '../components/SecurityRadarChart';
 import SecurityScoreCard from '../components/SecurityScoreCard';
-import { getLatestPcScan, startPcScan } from '../lib/api';
+import { getLatestPcScan, getPublicDemoConfig, startPcScan } from '../lib/api';
 import { getPcDimensions } from '../lib/securityDimensions';
 
 export default function PcSecurityPage() {
@@ -11,6 +11,10 @@ export default function PcSecurityPage() {
   const scan = useQuery({
     queryKey: ['pc-scan', 'latest'],
     queryFn: getLatestPcScan,
+  });
+  const config = useQuery({
+    queryKey: ['public-demo-config'],
+    queryFn: getPublicDemoConfig,
   });
   const runScan = useMutation({
     mutationFn: startPcScan,
@@ -42,6 +46,16 @@ export default function PcSecurityPage() {
           {runScan.isPending ? 'Scanning...' : 'Run scan'}
         </button>
       </header>
+
+      {config.data?.pcDemoMode ? (
+        <section className="notice-panel">
+          <strong>Demo Data</strong>
+          <p>
+            This web demo shows a sample Windows PC report. Run SecureScope
+            locally on Windows to inspect a real device.
+          </p>
+        </section>
+      ) : null}
 
       {scan.data ? (
         <>

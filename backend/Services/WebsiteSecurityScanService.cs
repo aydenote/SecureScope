@@ -1,9 +1,14 @@
 using System.Net; 
+using System.Net.Sockets;
+using Microsoft.Extensions.Options;
 using SecureScope.Api.Models;
 
 namespace SecureScope.Api.Services;
 
-public class WebsiteSecurityScanService(HttpClient httpClient, SecurityScoreService scoreService) 
+public class WebsiteSecurityScanService(
+    HttpClient httpClient,
+    SecurityScoreService scoreService,
+    IOptions<WebsiteScanOptions> options)
 {
     private static readonly SecurityHeaderRequirement[] SecurityHeaders = 
     [
@@ -14,17 +19,12 @@ public class WebsiteSecurityScanService(HttpClient httpClient, SecurityScoreServ
         new("Referrer-Policy", RiskLevel.Low, "Add a Referrer-Policy header that limits cross-origin referrer leakage."),
         new("Permissions-Policy", RiskLevel.Low, "Add a Permissions-Policy header to restrict browser features the site does not need.")
     ];
+    private readonly WebsiteScanOptions scanOptions = options.Value;
 
     public async Task<SecurityScanSummary> RunScanAsync(string url, CancellationToken cancellationToken = default) 
     {
         var target = NormalizeUrl(url); 
-        using var request = new HttpRequestMessage(HttpMethod.Get, target); 
-        request.Headers.UserAgent.ParseAdd("SecureScope/0.1 passive-security-scanner"); 
-
-        using var response = await httpClient.SendAsync(
-            request,
-            HttpCompletionOption.ResponseHeadersRead,
-            cancellationToken); 
+        using var response = await SendFollowingRedirectsAsync(target, cancellationToken);
 
         var evidence = WebsiteScanEvidence.FromResponse(response); 
         var checks = CreateChecks(evidence); 
@@ -39,6 +39,136 @@ public class WebsiteSecurityScanService(HttpClient httpClient, SecurityScoreServ
             ScannedAt = DateTimeOffset.UtcNow,
             Checks = checks
         };
+    }
+
+    private async Task<HttpResponseMessage> SendFollowingRedirectsAsync(
+        Uri initialTarget,
+        CancellationToken cancellationToken)
+    {
+        var target = initialTarget;
+
+        for (var redirectCount = 0; redirectCount <= scanOptions.MaxRedirects; redirectCount++)
+        {
+            await ValidateTargetAsync(target, cancellationToken);
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, target);
+            request.Headers.UserAgent.ParseAdd("SecureScope/0.1 passive-security-scanner");
+
+            var response = await httpClient.SendAsync(
+                request,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken);
+
+            if (!IsRedirect(response.StatusCode))
+            {
+                return response;
+            }
+
+            if (redirectCount == scanOptions.MaxRedirects)
+            {
+                response.Dispose();
+                throw new ArgumentException($"The website exceeded the redirect limit of {scanOptions.MaxRedirects}.");
+            }
+
+            if (response.Headers.Location is null ||
+                !Uri.TryCreate(target, response.Headers.Location, out var redirectTarget))
+            {
+                response.Dispose();
+                throw new ArgumentException("The website returned an invalid redirect URL.");
+            }
+
+            response.Dispose();
+            target = redirectTarget;
+        }
+
+        throw new ArgumentException("The website redirect chain could not be completed.");
+    }
+
+    private async Task ValidateTargetAsync(Uri target, CancellationToken cancellationToken)
+    {
+        if (target.Scheme is not ("http" or "https"))
+        {
+            throw new ArgumentException("Only http and https URLs are supported.");
+        }
+
+        if (!string.IsNullOrEmpty(target.UserInfo))
+        {
+            throw new ArgumentException("Website URLs with embedded credentials are not supported.");
+        }
+
+        if (!target.IsDefaultPort && target.Port is not (80 or 443))
+        {
+            throw new ArgumentException("Only ports 80 and 443 are supported.");
+        }
+
+        if (scanOptions.EnforceAllowlist &&
+            !scanOptions.AllowedHosts.Contains(target.Host, StringComparer.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("This public demo only scans approved example websites.");
+        }
+
+        IPAddress[] addresses;
+        try
+        {
+            addresses = await Dns.GetHostAddressesAsync(target.DnsSafeHost, cancellationToken);
+        }
+        catch (SocketException ex)
+        {
+            throw new ArgumentException("The website host could not be resolved.", ex);
+        }
+
+        if (addresses.Length == 0)
+        {
+            throw new ArgumentException("The website host did not resolve to an IP address.");
+        }
+
+        if (addresses.Any(IsBlockedAddress))
+        {
+            throw new ArgumentException("Local, private, and reserved network addresses cannot be scanned.");
+        }
+    }
+
+    private static bool IsRedirect(HttpStatusCode statusCode)
+    {
+        return statusCode is HttpStatusCode.MovedPermanently
+            or HttpStatusCode.Found
+            or HttpStatusCode.SeeOther
+            or HttpStatusCode.TemporaryRedirect
+            or HttpStatusCode.PermanentRedirect;
+    }
+
+    private static bool IsBlockedAddress(IPAddress address)
+    {
+        if (IPAddress.IsLoopback(address) ||
+            address.Equals(IPAddress.Any) ||
+            address.Equals(IPAddress.IPv6Any) ||
+            address.Equals(IPAddress.None) ||
+            address.Equals(IPAddress.IPv6None))
+        {
+            return true;
+        }
+
+        if (address.IsIPv4MappedToIPv6)
+        {
+            return IsBlockedAddress(address.MapToIPv4());
+        }
+
+        if (address.AddressFamily == AddressFamily.InterNetworkV6)
+        {
+            var bytes = address.GetAddressBytes();
+            return address.IsIPv6LinkLocal ||
+                address.IsIPv6Multicast ||
+                (bytes[0] & 0xfe) == 0xfc;
+        }
+
+        var octets = address.GetAddressBytes();
+        return octets[0] is 0 or 10 or 127 ||
+            octets[0] >= 224 ||
+            (octets[0] == 100 && octets[1] is >= 64 and <= 127) ||
+            (octets[0] == 169 && octets[1] == 254) ||
+            (octets[0] == 172 && octets[1] is >= 16 and <= 31) ||
+            (octets[0] == 192 && octets[1] == 168) ||
+            (octets[0] == 198 && octets[1] is 18 or 19);
     }
 
     private static Uri NormalizeUrl(string url) 

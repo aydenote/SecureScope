@@ -4,12 +4,21 @@ import CheckCard from '../components/CheckCard';
 import FindingCard from '../components/FindingCard';
 import SecurityRadarChart from '../components/SecurityRadarChart';
 import SecurityScoreCard from '../components/SecurityScoreCard';
-import { getLatestWebsiteScan, startWebsiteScan } from '../lib/api';
+import {
+  getLatestWebsiteScan,
+  getPublicDemoConfig,
+  startWebsiteScan,
+} from '../lib/api';
 import { getWebsiteDimensions } from '../lib/securityDimensions';
 
 export default function WebsiteSecurityPage() {
   const [url, setUrl] = useState('https://example.com');
+  const [authorized, setAuthorized] = useState(false);
   const queryClient = useQueryClient();
+  const config = useQuery({
+    queryKey: ['public-demo-config'],
+    queryFn: getPublicDemoConfig,
+  });
   const latestScan = useQuery({
     queryKey: ['website-scan', 'latest'],
     queryFn: getLatestWebsiteScan,
@@ -29,6 +38,11 @@ export default function WebsiteSecurityPage() {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (!authorized) {
+      return;
+    }
+
     scan.mutate(url);
   }
 
@@ -55,7 +69,7 @@ export default function WebsiteSecurityPage() {
             onChange={(event) => setUrl(event.target.value)}
             placeholder="https://example.com"
           />
-          <button type="submit" disabled={scan.isPending}>
+          <button type="submit" disabled={scan.isPending || !authorized}>
             {scan.isPending ? (
               'Scanning...'
             ) : (
@@ -63,6 +77,34 @@ export default function WebsiteSecurityPage() {
             )}
           </button>
         </div>
+        {config.data?.websiteAllowlistEnforced ? (
+          <div className="allowed-targets">
+            <span>Approved demo targets</span>
+            <div>
+              {config.data.websiteAllowedHosts.map((host) => (
+                <button
+                  className="target-button"
+                  key={host}
+                  onClick={() => setUrl(`https://${host}`)}
+                  type="button"
+                >
+                  {host}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        <label className="consent-row">
+          <input
+            checked={authorized}
+            onChange={(event) => setAuthorized(event.target.checked)}
+            type="checkbox"
+          />
+          <span>
+            I understand that scans must only target websites I own, am
+            authorized to test, or approved demo targets.
+          </span>
+        </label>
         {scan.isPending ? (
           <p className="muted">
             Scanning one page and collecting response headers...
@@ -70,7 +112,7 @@ export default function WebsiteSecurityPage() {
         ) : null}{' '}
         {scan.isError ? (
           <p className="error-text">
-            Website scan failed. Check that the API is running.
+            {scan.error.message}
           </p>
         ) : null}
       </form>

@@ -1,10 +1,19 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.RateLimiting;
 using SecureScope.Api.Data;
 using SecureScope.Api.Models;
 using SecureScope.Api.Services;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
+var pcDemoMode = builder.Configuration.GetValue<bool>("PcScanning:UseDemoData");
+var websiteScanOptions = builder.Configuration
+    .GetSection("WebsiteScanning")
+    .Get<WebsiteScanOptions>() ?? new WebsiteScanOptions();
+var frontendAllowedOrigins = builder.Configuration
+    .GetSection("Frontend:AllowedOrigins")
+    .Get<string[]>() ?? [];
 
 builder.Services.AddDbContext<SecureScopeDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection") ?? "Data Source=securescope.db"));
@@ -26,8 +35,10 @@ builder.Services.AddCors(options =>
                     return false;
                 }
 
-                return (uri.Host == "localhost" || uri.Host == "127.0.0.1")
+                var isLocalViteOrigin = (uri.Host == "localhost" || uri.Host == "127.0.0.1")
                     && uri.Port is >= 5173 and <= 5179;
+
+                return isLocalViteOrigin || frontendAllowedOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase);
             })
             .AllowAnyHeader()
             .AllowAnyMethod();
@@ -35,13 +46,37 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddScoped<PcSecurityScanService>();
+builder.Services.AddScoped<PcSecurityDemoService>();
 builder.Services.AddScoped<SecurityScoreService>();
 builder.Services.AddScoped<DefenderCheckService>(); 
 builder.Services.AddScoped<FirewallCheckService>(); 
 builder.Services.AddScoped<BitLockerCheckService>(); 
 builder.Services.AddScoped<StartupAppsCheckService>(); 
 builder.Services.AddScoped<WindowsUpdateCheckService>(); 
-builder.Services.AddHttpClient<WebsiteSecurityScanService>(); 
+builder.Services.Configure<WebsiteScanOptions>(builder.Configuration.GetSection("WebsiteScanning"));
+builder.Services
+    .AddHttpClient<WebsiteSecurityScanService>(client =>
+    {
+        client.Timeout = TimeSpan.FromSeconds(Math.Max(1, websiteScanOptions.TimeoutSeconds));
+    })
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+    {
+        AllowAutoRedirect = false
+    });
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("website-scans", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+            }));
+});
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -61,6 +96,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("Frontend");
+app.UseRateLimiter();
 
 app.MapGet("/api/health", () => Results.Ok(new
 {
@@ -69,12 +105,20 @@ app.MapGet("/api/health", () => Results.Ok(new
     timestamp = DateTimeOffset.UtcNow
 }));
 
+app.MapGet("/api/config", () => Results.Ok(new PublicDemoConfig(
+    pcDemoMode,
+    websiteScanOptions.EnforceAllowlist,
+    websiteScanOptions.AllowedHosts)));
+
 app.MapPost("/api/pc-scans", async (
     PcSecurityScanService scanService,
+    PcSecurityDemoService demoService,
     SecureScopeDbContext db,
     CancellationToken cancellationToken) =>
 {
-    var summary = await scanService.RunScanAsync(cancellationToken); 
+    var summary = pcDemoMode
+        ? demoService.CreateScan()
+        : await scanService.RunScanAsync(cancellationToken);
     db.ScanSummaries.Add(summary);
     await db.SaveChangesAsync(cancellationToken);
 
@@ -84,8 +128,14 @@ app.MapPost("/api/pc-scans", async (
 app.MapGet("/api/pc-scans/latest", async (
     SecureScopeDbContext db,
     PcSecurityScanService scanService,
+    PcSecurityDemoService demoService,
     CancellationToken cancellationToken) =>
 {
+    if (pcDemoMode)
+    {
+        return Results.Ok(demoService.CreateScan());
+    }
+
     var latest = await db.ScanSummaries
         .Include(scan => scan.Checks)
         .ThenInclude(check => check.Findings)
@@ -130,12 +180,26 @@ app.MapPost("/api/website-scans", async (
     {
         return Results.BadRequest(new { message = ex.Message }); 
     }
+    catch (HttpRequestException ex)
+    {
+        return Results.Problem(
+            title: "Website scan request failed.",
+            detail: ex.Message,
+            statusCode: StatusCodes.Status502BadGateway);
+    }
+    catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+    {
+        return Results.Problem(
+            title: "Website scan timed out.",
+            detail: "The website did not respond within the configured timeout.",
+            statusCode: StatusCodes.Status504GatewayTimeout);
+    }
 
     db.ScanSummaries.Add(summary);
     await db.SaveChangesAsync(cancellationToken);
 
     return Results.Created($"/api/website-scans/{summary.Id}", summary);
-});
+}).RequireRateLimiting("website-scans");
 
 app.MapGet("/api/website-scans/latest", async ( 
     SecureScopeDbContext db, 

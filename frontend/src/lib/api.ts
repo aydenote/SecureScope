@@ -31,6 +31,12 @@ export interface SecurityScanSummary {
   checks: SecurityCheckResult[];
 }
 
+export interface PublicDemoConfig {
+  pcDemoMode: boolean;
+  websiteAllowlistEnforced: boolean;
+  websiteAllowedHosts: string[];
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
@@ -41,10 +47,28 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new Error(`API request failed with ${response.status}`);
+    const body: unknown = await response.json().catch(() => null);
+    const message =
+      typeof body === 'object' &&
+      body !== null &&
+      'message' in body &&
+      typeof body.message === 'string'
+        ? body.message
+        : typeof body === 'object' &&
+            body !== null &&
+            'detail' in body &&
+            typeof body.detail === 'string'
+          ? body.detail
+        : `API request failed with ${response.status}`;
+
+    throw new Error(message);
   }
 
   return response.json() as Promise<T>;
+}
+
+export function getPublicDemoConfig() {
+  return request<PublicDemoConfig>('/api/config');
 }
 
 export function getLatestPcScan() {

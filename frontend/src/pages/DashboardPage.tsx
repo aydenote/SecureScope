@@ -7,6 +7,7 @@ import SecurityScoreCard from '../components/SecurityScoreCard';
 import {
   getLatestPcScan,
   getLatestWebsiteScan,
+  getPublicDemoConfig,
   getRecentScans,
 } from '../lib/api';
 import {
@@ -28,6 +29,10 @@ export default function DashboardPage() {
     queryKey: ['scans', 'recent'],
     queryFn: getRecentScans,
   });
+  const config = useQuery({
+    queryKey: ['public-demo-config'],
+    queryFn: getPublicDemoConfig,
+  });
   const scansForCounts = [pcScan.data, websiteScan.data].filter(
     (scan) => scan !== undefined
   );
@@ -45,6 +50,15 @@ export default function DashboardPage() {
       ) : null}
       {pcScan.isError ? (
         <p className="error-text">Unable to reach the backend API.</p>
+      ) : null}
+      {config.data?.pcDemoMode ? (
+        <section className="notice-panel">
+          <strong>PC Security Demo Data</strong>
+          <p>
+            The hosted dashboard uses a sample Windows report. Real PC checks
+            run locally with read-only PowerShell commands.
+          </p>
+        </section>
       ) : null}
       <section className="dashboard-score-grid">
         {pcScan.data ? (

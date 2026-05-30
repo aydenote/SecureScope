@@ -180,7 +180,11 @@ Website checks are passive:
 
 - Normalize the provided URL
 - Allow only `http` and `https`
-- Send one safe GET request
+- Allow only ports `80` and `443`
+- Reject local, private, and reserved network addresses
+- Resolve DNS and validate every redirect destination
+- Limit redirects and apply an HTTP timeout
+- Send a limited passive GET request flow without crawling additional paths
 - Collect final URL, HTTP status code, response headers, `Set-Cookie` headers, and HTTPS usage
 - Summarize collected headers and cookies without displaying raw values in dashboard cards
 - Check common browser security headers:
@@ -192,6 +196,8 @@ Website checks are passive:
   - `Permissions-Policy`
 
 Website scans should only be used on websites you own or are explicitly authorized to test.
+
+The hosted portfolio demo enables an allowlist. It only scans approved example hosts and applies a per-client rate limit of five website scan requests per minute. Local development keeps the allowlist optional so authorized targets can be tested manually.
 
 ## 10. What This Tool Does Not Do
 
@@ -304,7 +310,49 @@ Swagger is available in development:
 http://localhost:5000/swagger
 ```
 
-## 13. Future Improvements
+### Hosted Demo Configuration
+
+Production uses `backend/appsettings.Production.json`:
+
+- PC scans return a clearly labeled sample Windows report.
+- Website scans enforce the approved host allowlist.
+- Website scan requests are rate limited per client IP.
+
+When deploying the API, configure the deployed frontend origin:
+
+```text
+Frontend__AllowedOrigins__0=https://<your-vercel-project>.vercel.app
+```
+
+When deploying the frontend to Vercel, configure the API URL:
+
+```text
+VITE_API_BASE_URL=https://<your-api-host>
+```
+
+`frontend/vercel.json` contains the SPA rewrite needed for React Router deep links.
+
+## 13. Portfolio Demo Checklist
+
+Recommended presentation order:
+
+1. Deploy the React frontend to Vercel.
+2. Deploy the ASP.NET Core API to Azure App Service or another .NET-compatible host.
+3. Add the deployed frontend origin to `Frontend__AllowedOrigins__0`.
+4. Set the Vercel `VITE_API_BASE_URL` environment variable.
+5. Add a README screenshot showing the dashboard and website scan result.
+6. Record a one-to-two-minute Windows video showing a real local PC scan.
+7. Add the live demo URL and video URL near the top of this README.
+
+Suggested video flow:
+
+1. Start SecureScope locally on Windows.
+2. Run a PC scan.
+3. Show Defender, Firewall, BitLocker, Startup Apps, and Windows Update results.
+4. Open one finding and explain its evidence and recommendation.
+5. State that the PowerShell commands are read-only and do not change security settings.
+
+## 14. Future Improvements
 
 - Add scan export to JSON or CSV
 - Add configurable scoring policies
