@@ -4,6 +4,12 @@ SecureScope is a defensive, read-only security dashboard for checking a Windows 
 
 It combines a C# ASP.NET Core backend for local system inspection and HTTP scanning with a React dashboard for fast, clear review of scores, findings, and scan history.
 
+## Live Demo
+
+- Web demo: [https://secure-scope.vercel.app](https://secure-scope.vercel.app)
+- API config: [https://securescope-api-ayden.azurewebsites.net/api/config](https://securescope-api-ayden.azurewebsites.net/api/config)
+- Windows Download: https://github.com/aydenote/SecureScope/releases/latest
+
 ## 1. Project Overview
 
 SecureScope helps users answer two practical questions:
@@ -310,6 +316,48 @@ Swagger is available in development:
 http://localhost:5000/swagger
 ```
 
+### Windows Download Package
+
+The Windows package is intended for users who want to scan their own PC without installing Node.js or the .NET SDK.
+
+User flow:
+
+```text
+Download SecureScope-windows-x64.zip
+→ Extract the ZIP
+→ Double-click SecureScope.exe
+→ The dashboard opens in the default browser
+→ Run a real read-only PC scan
+```
+
+The local package:
+
+- Serves the React production build from the ASP.NET Core application.
+- Binds only to `http://127.0.0.1:5127`.
+- Stores SQLite data under the current Windows user's local application data directory.
+- Uses real Windows PC checks rather than hosted demo data.
+- Keeps website scanning available for authorized public websites.
+
+Create the package from macOS or Linux:
+
+```bash
+./scripts/package-windows.sh
+```
+
+Create the package from Windows PowerShell:
+
+```powershell
+.\scripts\package-windows.ps1
+```
+
+Generated release asset:
+
+```text
+artifacts/windows/SecureScope-windows-x64.zip
+```
+
+The ZIP must be tested on a Windows x64 machine before attaching it to a GitHub Release.
+
 ### Hosted Demo Configuration
 
 Production uses `backend/appsettings.Production.json`:
@@ -352,7 +400,18 @@ Suggested video flow:
 4. Open one finding and explain its evidence and recommendation.
 5. State that the PowerShell commands are read-only and do not change security settings.
 
-## 14. Future Improvements
+## 14. GitHub Release Checklist
+
+1. Build `artifacts/windows/SecureScope-windows-x64.zip`.
+2. Extract the ZIP on a Windows x64 PC.
+3. Double-click `SecureScope.exe`.
+4. Confirm that `http://127.0.0.1:5127` opens automatically.
+5. Run a PC scan and review Defender, Firewall, BitLocker, Startup Apps, and Windows Update results.
+6. Confirm that closing the console window stops the local server.
+7. Create GitHub Release `v0.1.0`.
+8. Attach `SecureScope-windows-x64.zip` as a release asset.
+
+## 15. Future Improvements
 
 - Add scan export to JSON or CSV
 - Add configurable scoring policies
