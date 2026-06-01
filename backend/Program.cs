@@ -3,20 +3,35 @@ using Microsoft.AspNetCore.RateLimiting;
 using SecureScope.Api.Data;
 using SecureScope.Api.Models;
 using SecureScope.Api.Services;
+using System.Diagnostics;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddJsonFile("appsettings.LocalPackage.json", optional: true, reloadOnChange: false);
+
 var pcDemoMode = builder.Configuration.GetValue<bool>("PcScanning:UseDemoData");
+var localPackageEnabled = builder.Configuration.GetValue<bool>("LocalPackage:Enabled");
+var localPackageUrl = builder.Configuration.GetValue<string>("LocalPackage:Url") ?? "http://127.0.0.1:5127";
 var websiteScanOptions = builder.Configuration
     .GetSection("WebsiteScanning")
     .Get<WebsiteScanOptions>() ?? new WebsiteScanOptions();
 var frontendAllowedOrigins = builder.Configuration
     .GetSection("Frontend:AllowedOrigins")
     .Get<string[]>() ?? [];
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? "Data Source=securescope.db";
+
+if (localPackageEnabled)
+{
+    var dataDirectory = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "SecureScope");
+    Directory.CreateDirectory(dataDirectory);
+    connectionString = $"Data Source={Path.Combine(dataDirectory, "securescope.db")}";
+}
 
 builder.Services.AddDbContext<SecureScopeDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection") ?? "Data Source=securescope.db"));
+    options.UseSqlite(connectionString));
 
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
@@ -97,6 +112,15 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors("Frontend");
 app.UseRateLimiter();
+
+var packagedFrontendPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "index.html");
+var hasPackagedFrontend = File.Exists(packagedFrontendPath);
+
+if (hasPackagedFrontend)
+{
+    app.UseDefaultFiles();
+    app.UseStaticFiles();
+}
 
 app.MapGet("/api/health", () => Results.Ok(new
 {
@@ -228,4 +252,29 @@ app.MapGet("/api/website-scans/{id:int}", async (
     return scan is null ? Results.NotFound() : Results.Ok(scan);
 });
 
+if (hasPackagedFrontend)
+{
+    app.MapFallbackToFile("index.html");
+}
+
+if (localPackageEnabled && OperatingSystem.IsWindows())
+{
+    app.Lifetime.ApplicationStarted.Register(() => OpenBrowser(localPackageUrl, app.Logger));
+}
+
 app.Run();
+
+static void OpenBrowser(string url, ILogger logger)
+{
+    try
+    {
+        Process.Start(new ProcessStartInfo(url)
+        {
+            UseShellExecute = true
+        });
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, "Unable to open the default browser. Navigate to {Url} manually.", url);
+    }
+}
