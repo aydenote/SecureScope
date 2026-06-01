@@ -12,5 +12,10 @@ node_modules/
 dist/
 *.tsbuildinfo
 
+# Generated local package files
+backend/wwwroot/
+backend/appsettings.LocalPackage.json
+artifacts/
+
 # OS/editor files
 .DS_Store
