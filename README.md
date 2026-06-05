@@ -380,6 +380,91 @@ VITE_API_BASE_URL=https://<your-api-host>
 
 `frontend/vercel.json` contains the SPA rewrite needed for React Router deep links.
 
+### Container Backend Deployment
+
+For reliable backend automation, use Azure Container Apps instead of App Service ZIP/Kudu deployment.
+
+One-time Azure setup:
+
+```bash
+RESOURCE_GROUP="securescope-rg"
+LOCATION="koreacentral"
+ACR_NAME="<globally-unique-acr-name>"
+CONTAINER_ENV="securescope-env"
+CONTAINER_APP="securescope-api-ayden"
+
+az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
+az acr create --resource-group "$RESOURCE_GROUP" --name "$ACR_NAME" --sku Basic
+az containerapp env create --resource-group "$RESOURCE_GROUP" --name "$CONTAINER_ENV" --location "$LOCATION"
+
+az containerapp create \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$CONTAINER_APP" \
+  --environment "$CONTAINER_ENV" \
+  --image mcr.microsoft.com/dotnet/samples:aspnetapp \
+  --target-port 8080 \
+  --ingress external \
+  --min-replicas 0 \
+  --max-replicas 1
+```
+
+Allow the container app to pull images from ACR:
+
+```bash
+ACR_LOGIN_SERVER=$(az acr show --resource-group "$RESOURCE_GROUP" --name "$ACR_NAME" --query loginServer --output tsv)
+ACR_ID=$(az acr show --resource-group "$RESOURCE_GROUP" --name "$ACR_NAME" --query id --output tsv)
+
+az containerapp identity assign \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$CONTAINER_APP" \
+  --system-assigned
+
+CONTAINER_APP_PRINCIPAL_ID=$(az containerapp show \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$CONTAINER_APP" \
+  --query identity.principalId \
+  --output tsv)
+
+az role assignment create \
+  --assignee "$CONTAINER_APP_PRINCIPAL_ID" \
+  --role AcrPull \
+  --scope "$ACR_ID"
+
+az containerapp registry set \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$CONTAINER_APP" \
+  --server "$ACR_LOGIN_SERVER" \
+  --identity system
+```
+
+Give the GitHub Actions Azure app permission to push images and update the container app:
+
+```bash
+GITHUB_ACTIONS_APP_ID="<AZURE_CLIENT_ID>"
+
+az role assignment create \
+  --assignee "$GITHUB_ACTIONS_APP_ID" \
+  --role AcrPush \
+  --scope "$ACR_ID"
+
+az role assignment create \
+  --assignee "$GITHUB_ACTIONS_APP_ID" \
+  --role "Container Apps Contributor" \
+  --scope "$(az containerapp show --resource-group "$RESOURCE_GROUP" --name "$CONTAINER_APP" --query id --output tsv)"
+```
+
+After the first workflow run, update Vercel:
+
+```text
+VITE_API_BASE_URL=https://<container-app-fqdn>
+```
+
+Then add the deployed Vercel origin to the container app environment variables if needed by CORS:
+
+```text
+Frontend__AllowedOrigins__0=https://<your-vercel-project>.vercel.app
+```
+
 ### Deployment Automation
 
 GitHub Actions automates the hosted demo deployment.
@@ -390,17 +475,23 @@ Required GitHub repository secrets:
 AZURE_CLIENT_ID
 AZURE_TENANT_ID
 AZURE_SUBSCRIPTION_ID
+AZURE_RESOURCE_GROUP                 # Repository variable
+AZURE_CONTAINER_APP_NAME             # Repository variable
+AZURE_ACR_NAME                       # Repository variable
+AZURE_ACR_LOGIN_SERVER               # Repository variable
+VITE_API_BASE_URL                    # Repository variable
+FRONTEND_ORIGIN                      # Repository variable
 VERCEL_TOKEN
 VERCEL_ORG_ID
 VERCEL_PROJECT_ID
 ```
 
-Azure deployment uses GitHub Actions OpenID Connect rather than an App Service publish profile, so App Service basic publishing authentication can stay disabled.
+Azure deployment uses GitHub Actions OpenID Connect and container image deployment, so App Service Kudu/ZIP deployment is not required.
 
 Workflow behavior:
 
 - `CI` runs on pull requests and pushes to `main`.
-- `Deploy Web Demo` runs on pushes to `main` and deploys the backend to Azure App Service and the frontend to Vercel.
+- `Deploy Web Demo` runs on pushes to `main`, pushes a backend container image to Azure Container Registry, updates Azure Container Apps, and deploys the frontend to Vercel.
 - `Release Windows Package` runs on `v*` tags and uploads `SecureScope-windows-x64.zip` to the GitHub Release.
 
 Create a Windows release:

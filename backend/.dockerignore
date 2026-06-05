@@ -1,0 +1,7 @@
+bin/
+obj/
+wwwroot/
+*.db
+*.db-shm
+*.db-wal
+appsettings.LocalPackage.json
