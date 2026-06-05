@@ -380,6 +380,36 @@ VITE_API_BASE_URL=https://<your-api-host>
 
 `frontend/vercel.json` contains the SPA rewrite needed for React Router deep links.
 
+### Deployment Automation
+
+GitHub Actions automates the hosted demo deployment.
+
+Required GitHub repository secrets:
+
+```text
+AZURE_CLIENT_ID
+AZURE_TENANT_ID
+AZURE_SUBSCRIPTION_ID
+VERCEL_TOKEN
+VERCEL_ORG_ID
+VERCEL_PROJECT_ID
+```
+
+Azure deployment uses GitHub Actions OpenID Connect rather than an App Service publish profile, so App Service basic publishing authentication can stay disabled.
+
+Workflow behavior:
+
+- `CI` runs on pull requests and pushes to `main`.
+- `Deploy Web Demo` runs on pushes to `main` and deploys the backend to Azure App Service and the frontend to Vercel.
+- `Release Windows Package` runs on `v*` tags and uploads `SecureScope-windows-x64.zip` to the GitHub Release.
+
+Create a Windows release:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
 ## 13. Portfolio Demo Checklist
 
 Recommended presentation order:
