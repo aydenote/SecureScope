@@ -54,7 +54,8 @@ jobs:
 
       - name: Build and push backend image
         run: |
-          IMAGE="${{ env.AZURE_ACR_LOGIN_SERVER }}/${{ env.CONTAINER_IMAGE_NAME }}:${{ github.sha }}"
+          ACR_LOGIN_SERVER="$(printf '%s' "$AZURE_ACR_LOGIN_SERVER" | tr -d '\r\n')"
+          IMAGE="$ACR_LOGIN_SERVER/${CONTAINER_IMAGE_NAME}:${GITHUB_SHA}"
           docker build \
             --file backend/Dockerfile \
             --tag "$IMAGE" \
