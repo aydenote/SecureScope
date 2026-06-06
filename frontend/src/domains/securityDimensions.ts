@@ -2,7 +2,7 @@ import type {
   RiskLevel,
   SecurityCheckResult,
   SecurityScanSummary,
-} from './api';
+} from '../lib/api';
 
 export interface SecurityDimensionScore {
   label: string;

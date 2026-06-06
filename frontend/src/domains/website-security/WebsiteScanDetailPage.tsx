@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
-import CheckCard from '../components/CheckCard';
-import FindingCard from '../components/FindingCard';
-import SecurityScoreCard from '../components/SecurityScoreCard';
-import { getWebsiteScan } from '../lib/api';
+import CheckCard from '../../components/CheckCard';
+import FindingCard from '../../components/FindingCard';
+import LoadingIndicator from '../../components/LoadingIndicator';
+import SecurityScoreCard from '../../components/SecurityScoreCard';
+import { getWebsiteScan } from '../../lib/api';
 
 export default function WebsiteScanDetailPage() {
   const { id } = useParams();
@@ -16,7 +17,7 @@ export default function WebsiteScanDetailPage() {
   const findings = scan.data?.checks.flatMap((check) => check.findings) ?? [];
 
   if (scan.isLoading) {
-    return <p className="muted">Loading website scan...</p>;
+    return <LoadingIndicator label="Loading website scan..." />;
   }
 
   if (scan.isError || !scan.data) {

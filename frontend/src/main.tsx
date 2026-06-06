@@ -3,10 +3,10 @@ import ReactDOM from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import App from './App';
+import PcSecurityPage from './domains/pc-security/PcSecurityPage';
+import WebsiteScanDetailPage from './domains/website-security/WebsiteScanDetailPage';
+import WebsiteSecurityPage from './domains/website-security/WebsiteSecurityPage';
 import DashboardPage from './pages/DashboardPage';
-import PcSecurityPage from './pages/PcSecurityPage';
-import WebsiteSecurityPage from './pages/WebsiteSecurityPage';
-import WebsiteScanDetailPage from './pages/WebsiteScanDetailPage';
 import './styles.css';
 
 const queryClient = new QueryClient();

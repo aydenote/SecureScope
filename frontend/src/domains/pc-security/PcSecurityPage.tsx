@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import CheckCard from '../components/CheckCard';
-import FindingCard from '../components/FindingCard';
-import SecurityRadarChart from '../components/SecurityRadarChart';
-import SecurityScoreCard from '../components/SecurityScoreCard';
-import { getLatestPcScan, getPublicDemoConfig, startPcScan } from '../lib/api';
-import { getPcDimensions } from '../lib/securityDimensions';
+import CheckCard from '../../components/CheckCard';
+import FindingCard from '../../components/FindingCard';
+import LoadingIndicator from '../../components/LoadingIndicator';
+import SecurityRadarChart from '../../components/SecurityRadarChart';
+import SecurityScoreCard from '../../components/SecurityScoreCard';
+import { getLatestPcScan, getPublicDemoConfig, startPcScan } from '../../lib/api';
+import { getPcDimensions } from '../securityDimensions';
 
 export default function PcSecurityPage() {
   const queryClient = useQueryClient();
@@ -43,9 +44,17 @@ export default function PcSecurityPage() {
           <h2>Windows status checks</h2>
         </div>
         <button onClick={() => runScan.mutate()} disabled={runScan.isPending}>
-          {runScan.isPending ? 'Scanning...' : 'Run scan'}
+          {runScan.isPending ? (
+            <LoadingIndicator compact label="Scanning" />
+          ) : (
+            'Run scan'
+          )}
         </button>
       </header>
+
+      {runScan.isPending ? (
+        <LoadingIndicator label="Running read-only PC security checks..." />
+      ) : null}
 
       {config.data?.pcDemoMode ? (
         <section className="notice-panel">

@@ -1,4 +1,4 @@
-import type { SecurityDimensionScore } from '../lib/securityDimensions';
+import type { SecurityDimensionScore } from '../domains/securityDimensions';
 import RiskBadge from './RiskBadge';
 
 interface SecurityRadarChartProps {

@@ -1,15 +1,16 @@
 import { FormEvent, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import CheckCard from '../components/CheckCard';
-import FindingCard from '../components/FindingCard';
-import SecurityRadarChart from '../components/SecurityRadarChart';
-import SecurityScoreCard from '../components/SecurityScoreCard';
+import CheckCard from '../../components/CheckCard';
+import FindingCard from '../../components/FindingCard';
+import LoadingIndicator from '../../components/LoadingIndicator';
+import SecurityRadarChart from '../../components/SecurityRadarChart';
+import SecurityScoreCard from '../../components/SecurityScoreCard';
 import {
   getLatestWebsiteScan,
   getPublicDemoConfig,
   startWebsiteScan,
-} from '../lib/api';
-import { getWebsiteDimensions } from '../lib/securityDimensions';
+} from '../../lib/api';
+import { getWebsiteDimensions } from '../securityDimensions';
 
 export default function WebsiteSecurityPage() {
   const [url, setUrl] = useState('https://example.com');
@@ -71,7 +72,7 @@ export default function WebsiteSecurityPage() {
           />
           <button type="submit" disabled={scan.isPending || !authorized}>
             {scan.isPending ? (
-              'Scanning...'
+              <LoadingIndicator compact label="Scanning" />
             ) : (
               'Scan'
             )}
@@ -106,9 +107,7 @@ export default function WebsiteSecurityPage() {
           </span>
         </label>
         {scan.isPending ? (
-          <p className="muted">
-            Scanning one page and collecting response headers...
-          </p>
+          <LoadingIndicator label="Scanning one page and collecting response headers..." />
         ) : null}{' '}
         {scan.isError ? (
           <p className="error-text">

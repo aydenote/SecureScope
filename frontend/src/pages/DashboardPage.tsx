@@ -13,7 +13,7 @@ import {
 import {
   getPcDimensions,
   getWebsiteDimensions,
-} from '../lib/securityDimensions';
+} from '../domains/securityDimensions';
 
 export default function DashboardPage() {
   const pcScan = useQuery({
